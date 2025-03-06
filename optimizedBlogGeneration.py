@@ -50,7 +50,7 @@ def getBlogStructureFromBlogURL(url):
             },
         ],
         response_format={"type": "json_object"},
-        model="onepai-large",
+        model="openai-large",
     )
 
     return assistant.sendMessage(
@@ -89,11 +89,12 @@ SEO_CHECKLIST = [
 def generateBaseBlogUsingKeyword(keyword: str, companyurl: str = None, companyProfile = None, blogStructure = None, tone="Normal"):
     competitorBlogUrl = None
     try:
-        for j in search(keyword, tld="co.in", num=100, stop=100, pause=2):
+        for j in search(keyword, num_results=100, sleep_interval=2, region="in"):
             if any([(x in j) for x in["/blog/", '/blogs/', '/article/', '/content/']]):
                 competitorBlogUrl = j
                 break
-    except:
+    except Exception as e:
+        print(e)
         pass
     if(not blogStructure):
         blogStructure = getBlogStructureFromBlogURL(competitorBlogUrl)
@@ -129,7 +130,7 @@ def generateBaseBlogUsingKeyword(keyword: str, companyurl: str = None, companyPr
     blogAuditorAssistant = PollinationAIAssistant(
         instruction="You are a blog auditor and your job is to audit the blog based on the checklist provided.",
         response_format={"type": "json_object"},
-        model="onepai-large"
+        model="openai-large"
     )
     blogAuditorAssistant.addMessage(
         "You are a blog auditor you will be provided with a blog, a company profile and a blog checklist and your job is to make sure that the blog is following everything mentioned in th e checklist"
@@ -183,13 +184,13 @@ def generateBaseBlogUsingKeyword(keyword: str, companyurl: str = None, companyPr
 def addPromotionalUrlsToBlog(baseBlog:str, keyword, groupedUrls:dict[str, list], promotionalGroups:list):
     promotionalUrls = getPromotionalUrls(groupedUrls, promotionalGroups)
     relevantPromotionalUrls = getRelevantPromotionalUrls(promotionalUrls, keyword)
-    assistant = PollinationAIAssistant(model="onepai-large-blogs")
+    assistant = PollinationAIAssistant(model="openai-large-blogs")
     assistant.sendMessage(f'{relevantPromotionalUrls}\n\ncan you filter out the relevant urls for the keyword "farewell gift for teachers" also make sure that there are no inappropriate urls in the filtered list.')
     return assistant.sendMessage(f"now I want you to incorporate these filtered urls in the give blog as promotional urls DO NOT change any other content of the blog just incorporate these urls in a subtle way:\n{baseBlog}")
 
 def addImagesToBlog(baseBlog):
-    assistant = PollinationAIAssistant(model="onepai-large", response_format={"type": "json_object"})
-    prompts = json.loads(assistant.sendMessage(f"{baseBlog}\n\n\n\nI am writing a blog but in this blog there are no real images the images currently used in this blog are not actually images they are more like placeholder images. I need you to give me a list of prompts that I can generate using an image model and incorporate in this blog. Remember the list of prompts doesn't only need to have images placeholders from the blog you can add more images if there's a place where it can be added. Also please don't add too many images in a blog if the blog is to small. At most only add 4-5 images. The output needs to be in the form of json array with key 'prompts'"))['prompts']
+    assistant = PollinationAIAssistant(model="openai-large", response_format={"type": "json_object"})
+    prompts = json.loads(assistant.sendMessage(f"{baseBlog}\n\n\n\nI am writing a blog but in this blog there are no real images the images currently used in this blog are not actually images they are more like placeholder images. I need you to give me a list of prompts that I can generate using an image model and incorporate in this blog. Remember the list of prompts doesn't only need to have images placeholders from the blog you can add more images if there's a place where it can be added. Also please don't add too many images in a blog if the blog is to small. At most only add 4-5 images. The output needs to be in the form of json array with key {{'prompts': ['generate an image...', 'generate another image...']}}"))['prompts']
     images = []
     for prompt in prompts:
         images.append(client.generateImage(prompt, generate=False))

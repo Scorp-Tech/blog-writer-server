@@ -26,6 +26,10 @@ supabase_key: str = os.environ.get("SUPABASE_KEY")
 
 app = Flask(__name__)
 
+@app.route("/")
+def index():
+    return jsonify({"status": "Server is up and running"}), 200
+
 
 @app.route("/save-company-data", methods=["POST"])
 def saveCompanyProfile():
@@ -238,7 +242,7 @@ def addUrls():
 
 
 @app.route("/add-images-to-blog", methods=["GET"])
-def addImagesToBlog():
+def addImagesToBlog1():
     access_token = request.authorization.token
     data: dict = request.json
     supabase: Client = create_client(supabase_url, supabase_key)
@@ -326,12 +330,7 @@ def generateBlog():
         )
         .execute()
     )
-    return Response(response.data, mimetype="application/json")
-
-
-@app.route("/add-urls-to-blog", methods=["get"])
-def addUrlsToBlog():
-    pass
+    return jsonify(response.data), 200
 
 
 @app.route("/crawl", methods=["GET"])
@@ -354,5 +353,15 @@ def crawl():
                 "reason": str(e)
             }), 500
 
+
+
+@app.route("/get-token", methods=["GET"])
+def getToken():
+    data = request.form
+    email = data.get("email")
+    password = data.get("password")
+    supabase: Client = create_client(supabase_url, supabase_key)
+    supabase.auth.sign_in_with_password({"email": email, "password": password })
+    return supabase.auth.get_session().access_token
 
 app.run(debug=True)

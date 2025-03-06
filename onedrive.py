@@ -6,7 +6,7 @@ from werkzeug.utils import secure_filename
 CLIENT_ID = "f2a0cca4-a73a-497c-aee3-d15256e5c8d3"  # Replace with your app's Client ID
 AUTHORITY = "https://login.microsoftonline.com/consumers"  # For personal accounts
 SCOPES = ["Files.ReadWrite", "User.Read"]
-SERVER = "http://127.0.0.1:5000"
+SERVER = "https://equipped-harmless-gull.ngrok-free.app"
 
 # Microsoft Graph API base URL
 GRAPH_API_ENDPOINT = "https://graph.microsoft.com/v1.0/me/drive"
@@ -56,11 +56,17 @@ def upload_file(binary_data, onedrive_path, file_name):
         res = requests.post(f"{GRAPH_API_ENDPOINT}/items/{response.json()['id']}/createLink", headers=headers, data=json.dumps({
             "type": "embed",
             "scope": "anonymous",
-        })).json()
-        return({
-            "onedriveUrl" : res['link']['webUrl'],
-            "url": f"{SERVER}/{onedrive_path}/{file_name}",
-        })
+        }))
+        if(res.status_code == 200):
+            return({
+                "onedriveUrl" : res.json()['link']['webUrl'],
+                "url": f"{SERVER}/{onedrive_path}/{file_name}",
+            })
+        else:
+            return({
+                "onedriveUrl" : f"{SERVER}/{onedrive_path}/{file_name}",
+                "url": f"{SERVER}/{onedrive_path}/{file_name}",
+            })
     else:
         print(f"Upload failed: {response.text}")
         return None

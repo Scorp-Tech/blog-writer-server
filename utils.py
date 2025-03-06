@@ -151,8 +151,6 @@ def getRelevantPromotionalUrls(promotionalUrls:list, _keyword:str):
         url = t.scheme + "://" + t.hostname + t.path
         url1 = re.sub("(\/|\.|\-|\:)", " ", url)
         url1 = re.sub("[^A-z ]", "", url1)
-        if("father" in url):
-            pass
         if(url not in visitedUrl):
             for x, keyword in enumerate(keywords1):
                 if(keyword in url):
@@ -293,6 +291,9 @@ def parse_html_page(html_content: str, url, screenshot) -> dict:
             "text": link_text
         })
     
+    videos = len(soup.find_all("video"))
+    images = len(soup.find_all("image"))
+    
     # Create the final dictionary using current UTC time for "crawledAt"
     parsed_data = {
         "url": url,
@@ -306,7 +307,6 @@ def parse_html_page(html_content: str, url, screenshot) -> dict:
             "indexingAllowed": True,
             "indexing": {
                 "userDeclaredCanonical": url,
-                "googleSelectedCanonical": url
             },
             "inspectedURL": url
         },
@@ -318,6 +318,8 @@ def parse_html_page(html_content: str, url, screenshot) -> dict:
                 "description": meta_description,
                 "keywords": meta_keywords
             },
+            "numberOfVideos": videos,
+            "numberOfImages": images,
             "headers": {
                 "Content-Type": "text/html; charset=UTF-8",
                 "Date": datetime.datetime.utcnow().replace(microsecond=0).isoformat() + "Z",
