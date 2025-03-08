@@ -1,3 +1,3 @@
+from uuid import uuid4
 
-
-from utils import getRelevantPromotionalUrls()
+print(str(uuid4()))

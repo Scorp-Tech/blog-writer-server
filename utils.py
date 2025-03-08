@@ -329,3 +329,21 @@ def parse_html_page(html_content: str, url, screenshot) -> dict:
     }
     
     return parsed_data
+
+
+def setBlogGenerationStatus(id, status, message="", markdown=""):
+    if(id and getBlogGenerationStatus(id)['status'] != "CANCELLED"):
+        f = open(f"status/{id}.json", 'w', encoding='utf-8')
+        f.write(json.dumps({
+            "status": status,
+            "message": message,
+            "markdown": markdown
+        }))
+        f.close()
+
+def getBlogGenerationStatus(id):
+    try:
+        f = open(f"status/{id}.json", 'r', encoding='utf-8')
+        return json.loads(f.read())
+    except Exception as e:
+        return {"status": "ERROR", "message": str(e)}

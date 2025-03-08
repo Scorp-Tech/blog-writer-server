@@ -31,6 +31,10 @@ class PollinationAIAssistant():
                 "response_format": self.response_format
             }), headers={ "Content-Type": "application/json" })
             if(response.status_code == 200):
+                self.messages.append({
+                    "role": "assistant",
+                    "content": response.text
+                })
                 return response.text
             else:
                 time.sleep(10)

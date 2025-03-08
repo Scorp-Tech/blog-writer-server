@@ -3,7 +3,7 @@ import requests
 from pollinationai import PollinationAI, PollinationAIAssistant
 from googlesearch import search
 import json
-from utils import getGroupedUrls, groupUrls, getPromotionalUrls, getRelevantPromotionalUrls, getRelatedKeywords, getCompanyProfile
+from utils import getGroupedUrls, groupUrls, getPromotionalUrls, getRelevantPromotionalUrls, getRelatedKeywords, getCompanyProfile, setBlogGenerationStatus, getBlogGenerationStatus
 
 client = PollinationAI()
 
@@ -69,6 +69,7 @@ class _TONES():
         self.Creative = "Creative"
         self.Persuasive = "Persuasive"  
 
+
 TONES = _TONES()
 
 x = TONES.Persuasive
@@ -86,7 +87,7 @@ SEO_CHECKLIST = [
 ]
 
 
-def generateBaseBlogUsingKeyword(keyword: str, companyurl: str = None, companyProfile = None, blogStructure = None, tone="Normal"):
+def generateBaseBlogUsingKeyword(keyword: str, companyurl: str = None, companyProfile = None, blogStructure = None, tone="Normal", blogId=None):
     competitorBlogUrl = None
     try:
         for j in search(keyword, num_results=100, sleep_interval=2, region="in"):
@@ -96,7 +97,7 @@ def generateBaseBlogUsingKeyword(keyword: str, companyurl: str = None, companyPr
     except Exception as e:
         print(e)
         pass
-    if(not blogStructure):
+    if(not blogStructure and competitorBlogUrl):
         blogStructure = getBlogStructureFromBlogURL(competitorBlogUrl)
     if not blogStructure:
         blogStructure = """'\n{\n  "type": "blog",\n  "sections": [\n    {\n      "type": "header",\n      "level": 1,\n      "content": ""\n    },\n    {\n      "type": "introduction",\n      "paragraphs": [\n        {\n          "type": "paragraph",\n          "content": ""\n        }\n      ]\n    },\n    {\n      "type": "tableOfContents",\n      "items": [\n        {\n          "type": "tocItem",\n          "text": "",\n          "link": ""\n        }\n      ]\n    },\n    {\n      "type": "section",\n      "id": "section-1",\n      "heading": {\n        "level": 2,\n        "content": ""\n      },\n      "content": {\n        "paragraphs": [\n          {\n            "type": "paragraph",\n            "content": ""\n          }\n        ],\n        "images": [\n          {\n            "src": "",\n            "alt": "",\n            "position": "withinText"\n          }\n        ],\n        "lists": [\n          {\n            "type": "unordered",\n            "items": ["", "", ""]\n          }\n        ]\n      }\n    },\n    {\n      "type": "section",\n      "id": "section-2",\n      "heading": {\n        "level": 2,\n        "content": ""\n      },\n      "content": {\n        "paragraphs": [\n          {\n            "type": "paragraph",\n            "content": ""\n          }\n        ],\n        "images": [\n          {\n            "src": "",\n            "alt": "",\n            "position": "withinText"\n          }\n        ],\n        "lists": [\n          {\n            "type": "unordered",\n            "items": ["", "", ""]\n          }\n        ]\n      }\n    },\n    {\n      "type": "features",\n      "items": [\n        {\n          "type": "featureItem",\n          "headline": "",\n          "content": {\n            "paragraphs": [\n              {\n                "type": "paragraph",\n                "content": ""\n              }\n            ],\n            "images": [\n              {\n                "src": "",\n                "alt": ""\n              }\n            ]\n          }\n        },\n        {\n          "type": "featureItem",\n          "headline": "",\n          "content": {\n            "paragraphs": [\n              {\n                "type": "paragraph",\n                "content": ""\n              }\n            ],\n            "images": [\n              {\n                "src": "",\n                "alt": ""\n              }\n            ]\n          }\n        }\n      ]\n    },\n    {\n      "type": "conclusion",\n      "paragraphs": [\n        {\n          "type": "paragraph",\n          "content": ""\n        }\n      ]\n    }\n  ]\n}\n\n\n\n\n'"""
@@ -161,38 +162,47 @@ def generateBaseBlogUsingKeyword(keyword: str, companyurl: str = None, companyPr
 "blogAudit": "This part of the output should contain the analysis of the blog based on the checklist and should also contain suggestions for improvement."
 }"""
     )
+    setBlogGenerationStatus(blogId, "GEN_STRUCTURE", "Generating blog structure.")
     blogWriterAssistant.sendMessage(
         f'Can you write a blog for the keyword "{keyword}"\nThe generated blog should be in markdown format and should maintain {tone} tone'
     )
     blogContent = blogWriterAssistant.sendMessage(
         "Can you make the blog longer?"
     )
-    blogAudit = blogAuditorAssistant.sendMessage(
-        f"Here's the keyworrd: {keyword}\nAnd Here's the blog content: \n{blogContent}"
-    )
+    setBlogGenerationStatus(blogId, "AUDIT_STRUCTURE", "Auditing blog structure.")
+    blogAudit = blogAuditorAssistant.sendMessage(f"Here's the keyworrd: {keyword}\nAnd Here's the blog content: \n{blogContent}\n\n\nRemember you are an api so only respond with the markdown text DO NOT add anything around the blog markdown text.").replace("markdown", "").replace("```", "").strip()
     while True:
         t = json.loads(blogAudit)
         if not t["needsImprovement"]:
             return blogContent.replace("�", "'")
+        setBlogGenerationStatus(blogId, "FIX_STRUCTURE", "Fixing blog structure.")
         blogContent = blogWriterAssistant.sendMessage(
             json.dumps(t["blogAudit"])
         )
+        setBlogGenerationStatus(blogId, "AUDIT_STRUCTURE1", "Auditing blog structure.")
         blogAudit = blogAuditorAssistant.sendMessage(
             f"Here's the updated blog: \n{blogContent}"
         )
 
-def addPromotionalUrlsToBlog(baseBlog:str, keyword, groupedUrls:dict[str, list], promotionalGroups:list):
+def addPromotionalUrlsToBlog(baseBlog:str, keyword, groupedUrls:dict[str, list], promotionalGroups:list, blogId=None):
     promotionalUrls = getPromotionalUrls(groupedUrls, promotionalGroups)
     relevantPromotionalUrls = getRelevantPromotionalUrls(promotionalUrls, keyword)
     assistant = PollinationAIAssistant(model="openai-large-blogs")
+    setBlogGenerationStatus(blogId, "GEN_RELV_URL", "Filtering relevant urls")
     assistant.sendMessage(f'{relevantPromotionalUrls}\n\ncan you filter out the relevant urls for the keyword "farewell gift for teachers" also make sure that there are no inappropriate urls in the filtered list.')
-    return assistant.sendMessage(f"now I want you to incorporate these filtered urls in the give blog as promotional urls DO NOT change any other content of the blog just incorporate these urls in a subtle way:\n{baseBlog}")
+    setBlogGenerationStatus(blogId, "ADD_RELV_URL", "Adding relevant urls to the blog")
+    return assistant.sendMessage(f"now I want you to incorporate these filtered urls in the give blog as promotional urls DO NOT change any other content of the blog just incorporate these urls in a subtle way:\n{baseBlog}\n\n\nRemember you are an api so only respond with the markdown text DO NOT add anything around the blog markdown text.").replace("markdown", "").replace("```", "").strip()
 
-def addImagesToBlog(baseBlog):
+def addImagesToBlog(baseBlog, blogId=None):
     assistant = PollinationAIAssistant(model="openai-large", response_format={"type": "json_object"})
     prompts = json.loads(assistant.sendMessage(f"{baseBlog}\n\n\n\nI am writing a blog but in this blog there are no real images the images currently used in this blog are not actually images they are more like placeholder images. I need you to give me a list of prompts that I can generate using an image model and incorporate in this blog. Remember the list of prompts doesn't only need to have images placeholders from the blog you can add more images if there's a place where it can be added. Also please don't add too many images in a blog if the blog is to small. At most only add 4-5 images. The output needs to be in the form of json array with key {{'prompts': ['generate an image...', 'generate another image...']}}"))['prompts']
+    setBlogGenerationStatus(blogId, "GEN_IMGS", f"Generating and uploading {len(prompts)} images")
     images = []
     for prompt in prompts:
-        images.append(client.generateImage(prompt, generate=False))
+        images.append({
+            "prompt": prompt,
+            "imageUrl" : client.generateImage(prompt, generate=False)
+        })
     assistant.response_format = {"type": "text"}
+    setBlogGenerationStatus(blogId, "ADD_IMGS", "Almost done! Adding images to the blog.")
     return assistant.sendMessage(f"incorporate these images in the blog {images}\n\n\nRemember you are an api so only respond with the markdown text DO NOT add anything around the blog markdown text.").replace("markdown", "").replace("```", "").strip()

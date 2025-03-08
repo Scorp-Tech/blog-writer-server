@@ -1,3 +1,6 @@
+import threading
+import asyncio
+from uuid import uuid4
 from flask import Flask, request, jsonify, Response
 from markupsafe import escape
 from utils import (
@@ -5,7 +8,9 @@ from utils import (
     getGroupedUrls,
     getPromotionalUrlGroups,
     getJavascriptRenderedPage,
-    parse_html_page
+    parse_html_page,
+    setBlogGenerationStatus,
+    getBlogGenerationStatus
 )
 import os
 from optimizedBlogGeneration import (
@@ -19,12 +24,14 @@ from onedrive import upload_file, download_file
 from PIL import Image
 import io
 import mimetypes
+from flask_cors import CORS, cross_origin
+import time
+app = Flask(__name__)
+CORS(app)
 
 supabase_url: str = os.environ.get("SUPABASE_URL")
 supabase_key: str = os.environ.get("SUPABASE_KEY")
 
-
-app = Flask(__name__)
 
 @app.route("/")
 def index():
@@ -54,6 +61,7 @@ def saveCompanyProfile():
                     "grouped_urls": groupedUrls,
                     "promotional_url_groups": promotionalUrlGroups,
                     "user_id": userId,
+                    "companyUrl": url
                 }
             )
             .execute()
@@ -279,10 +287,20 @@ def addImagesToBlog1():
     )
     return Response(response.data, mimetype="application/json")
 
+def run_async_in_thread(coro):
+    """Run an asyncio coroutine in a new event loop inside a separate thread."""
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        loop.run_until_complete(coro)
+    finally:
+        loop.close()
 
-@app.route("/generate-blog", methods=["GET"])
+
+@app.route("/generate-blog", methods=["GET", "POST"])
 def generateBlog():
-    access_token = request.authorization.token
+    access_token = request.authorization.token.replace("Bearer ", "")
+    if(not access_token): return jsonify({"error": "Please provide the access token of the user"}), 401
     data: dict = request.json
     supabase: Client = create_client(supabase_url, supabase_key)
     supabase.postgrest.auth(access_token)
@@ -311,27 +329,90 @@ def generateBlog():
             return jsonify({"error": "List of promotional groups not provided."}), 400
     if not keyword:
         return jsonify({"error": "No Keyword Provided."}), 400
+    if not data.get("waitForGeneration", False):
+        blogId = str(uuid4())
+        # Start the asynchronous blog generation in a background thread.
+        threading.Thread(
+            target=run_async_in_thread,
+            args=(
+                _generateBlog(
+                    blogId, keyword, companyUrl, companyProfile, structure,
+                    tone, groupedUrls, promotionalGroups, supabase, userId, companyId
+                ),
+            ),
+        ).start()
+        return jsonify({"id": blogId}), 200
 
-    blog = generateBaseBlogUsingKeyword(
-        keyword, companyUrl, companyProfile, structure, tone
-    )
-    if companyUrl:
-        blog = addPromotionalUrlsToBlog(blog, keyword, groupedUrls, promotionalGroups)
-    blog = addImagesToBlog(blog)
-    response = (
-        supabase.table("Blogs")
-        .insert(
-            {
+    else:
+        # Synchronous generation if waiting for the result.
+        blog = generateBaseBlogUsingKeyword(keyword, companyUrl, companyProfile, structure, tone)
+        if companyUrl:
+            blog = addPromotionalUrlsToBlog(blog, keyword, groupedUrls, promotionalGroups)
+        blog = addImagesToBlog(blog)
+        response = (
+            supabase.table("Blogs")
+            .insert({
                 "markdown": blog,
                 "status": "DONE",
                 "user_id": userId,
                 "company": companyId,
-            }
+                "id": blogId
+            })
+            .execute()
         )
-        .execute()
-    )
-    return jsonify(response.data), 200
+        return jsonify(response.data), 200
 
+async def _generateBlog(blogId, keyword, companyUrl, companyProfile, structure, tone, groupedUrls, promotionalGroups, supabase, userId, companyId):
+    setBlogGenerationStatus(blogId, "STARTED", "Blog generation has started.")
+    blog = generateBaseBlogUsingKeyword(keyword, companyUrl, companyProfile, structure, tone, blogId)
+    if(getBlogGenerationStatus(blogId)['status'] == "CANCELLED"): return
+    setBlogGenerationStatus(blogId, "STRUCTURE", "Blog structure generated!", blog)
+    if companyUrl:
+        blog = addPromotionalUrlsToBlog(blog, keyword, groupedUrls, promotionalGroups, blogId)
+        if(getBlogGenerationStatus(blogId)['status'] == "CANCELLED"): return
+        setBlogGenerationStatus(blogId, "URL", "Relevant urls added to the blog!", blog)
+    blog = addImagesToBlog(blog, blogId)
+    try:
+        if(getBlogGenerationStatus(blogId)['status'] == "CANCELLED"): setBlogGenerationStatus(blogId, "CANCELLED", "Blog generated!!", blog); return
+        supabase.table("Blogs").insert({
+            "markdown": blog,
+            "status": "DONE",
+            "user_id": userId,
+            "company": companyId,
+            "id": blogId
+        }).execute()
+        setBlogGenerationStatus(blogId, "DONE", "Blog generated!!", blog)
+        time.sleep(20)
+        os.remove(f"{blogId}.json")
+    except:
+        setBlogGenerationStatus(blogId, "ERROR")
+
+
+@app.route("/cancel-generation", methods=["POST"])
+def cancelBlogGeneration():
+    data: dict = request.json
+    blogId = data.get("id")
+    if(blogId):
+        setBlogGenerationStatus(blogId, "CANCELLED")
+    return getBlogGenerationStatus(blogId)
+
+@app.route("/get-generation-status", methods=["GET", "POST"])
+def getGenerationStatus():
+    # access_token = request.authorization.token
+    data: dict = request.json
+    # supabase: Client = create_client(supabase_url, supabase_key)
+    # supabase.postgrest.auth(access_token)
+    # userId = data.get("userId")
+    blogId = data.get("id")
+    # if not userId:
+    #     return jsonify({"error": "No Use ID Provided."}), 401
+    # if supabase.auth.get_user(access_token).user.id != userId:
+    #     return jsonify({"error": "Authentication error"}), 401
+
+    # blog = supabase.table("Blogs").select("status").eq("id", blogId).single().execute()
+    # app.logger.info(blog)
+    status = getBlogGenerationStatus(blogId)
+    return jsonify(status), 200
 
 @app.route("/crawl", methods=["GET"])
 def crawl():
