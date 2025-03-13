@@ -6,7 +6,7 @@ from werkzeug.utils import secure_filename
 CLIENT_ID = "f2a0cca4-a73a-497c-aee3-d15256e5c8d3"  # Replace with your app's Client ID
 AUTHORITY = "https://login.microsoftonline.com/consumers"  # For personal accounts
 SCOPES = ["Files.ReadWrite", "User.Read"]
-SERVER = "https://equipped-harmless-gull.ngrok-free.app"
+SERVER = "https://rankup.scorptech.co"
 
 # Microsoft Graph API base URL
 GRAPH_API_ENDPOINT = "https://graph.microsoft.com/v1.0/me/drive"
