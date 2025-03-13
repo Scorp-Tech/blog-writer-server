@@ -140,8 +140,9 @@ def getFile(name):
     return response
 
 
-@app.route("/upload", methods=["PUT"])
+@app.route("/upload", methods=["PUT", "POST"])
 def upload():
+    app.logger.info(list(request.form.keys()))
     # Assuming the client uses a key like "file" for the uploaded file.
     if "file" not in request.files:
         return jsonify({"error": "No file part"}), 400
@@ -166,7 +167,7 @@ def upload():
 
     uploaded_url = upload_file(binary_data, onedrive_path, file_name)
     if uploaded_url:
-        return jsonify({"url": uploaded_url}), 200
+        return jsonify(uploaded_url), 200
     else:
         return jsonify({"error": "Upload failed"}), 500
 
@@ -445,4 +446,3 @@ def getToken():
     supabase.auth.sign_in_with_password({"email": email, "password": password })
     return supabase.auth.get_session().access_token
 
-app.run(debug=True)

@@ -197,8 +197,8 @@ def getPageContent(url, device="Mobile"):
 def getCompanyProfile(url):
     return json.loads(client.sendMessage("Based on the following website content, extract key information about the company. "
         "Provide the details in JSON format with the following fields: \n"
-        "CompanyName, Company Description, Industry, Products/Services, Mission Statement, "
-        "Key Leadership, Headquarters Location, and any other relevant details. \n\n"
+        "CompanyName, CompanyLogo, CompanyDescription, Industry, Products/Services, MissionStatement, "
+        "KeyLeadership, HeadquartersLocation, and any other relevant details. \n\n"
         "Website Content:\n" + getPageContent(url), response_format={"type": "json_object"}))
 
 def writeCompanyData(companyName, dataName, data):
